@@ -1,0 +1,11 @@
+# Ignore datasets
+data/*.txt
+data/*.csv
+data/*.h5
+data/*.parquet
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Mac junk
+.DS_Store
