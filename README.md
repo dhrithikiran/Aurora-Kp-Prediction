@@ -90,6 +90,22 @@ To predict Kp at 06:00 → use solar wind data from 04:30 to 05:30.
 2. Convert TXT file to CSV using Python
 3. Rename columns and clean data
 4. Convert Kp × 10 to real Kp
+5. Handled missing values / noisy data 
+6. Check numeric data types and convert it
+
+
+## Exploratory Data Analysis (EDA)
+
+EDA was performed to understand dataset patterns and relationships:
+
+* **Basic Info & Descriptive Stats**: `df.info()` and `df.describe()`  
+* **Time Series Plots**: Visualize Kp and solar wind parameters over time  
+* **Correlation Heatmap**: Examine relationships between Kp and input features  
+* **Distribution Plots**: Histograms for Kp and solar wind parameters to check skewness  
+* **Boxplots**: Detect extreme values and outliers  
+* **Scatter Plots vs Kp**: Visualize the influence of each parameter on Kp  
+* **Rolling Averages**: 24h and 72h Kp rolling means to observe trends  
+* **Lagged Visualization**: Plot lagged solar wind features (1, 2, 3, 6 hours) to inspect temporal dependencies
 
 
 ## Notes
