@@ -107,11 +107,98 @@ EDA was performed to understand dataset patterns and relationships:
 * **Rolling Averages**: 24h and 72h Kp rolling means to observe trends  
 * **Lagged Visualization**: Plot lagged solar wind features (1, 2, 3, 6 hours) to inspect temporal dependencies
 
+## Feature Engineering
+
+Feature engineering was performed to capture temporal dependencies, physical relationships, and storm dynamics in geomagnetic activity.
+
+### 1. Handling Missing Values
+
+The OMNI dataset may contain missing and flagged values. Missing values were handled using:
+- Linear interpolation for short gaps  
+- Forward-fill and backward-fill for small consecutive gaps  
+This prevents data leakage while preserving time-series continuity.
+
+### 2. Lag Features (Temporal Dependency)
+
+Geomagnetic activity depends on recent solar wind conditions, so lagged features were created:
+
+**Lagged Solar Wind Parameters**
+- Bz(t−1h), Bz(t−2h), Bz(t−3h), Bz(t−6h)  
+- Solar Wind Speed V(t−1h), V(t−2h), V(t−3h)  
+- Proton Density D(t−1h), D(t−2h), D(t−3h)
+
+**Lagged Kp Values**
+- Kp(t−1) to Kp(t−6)  
+These capture geomagnetic storm persistence and recovery effects.
+
+### 3. Rolling Statistics (Trend & Variability)
+
+Rolling window statistics were computed to capture recent trends:
+
+**Rolling Windows**
+- 1 hour, 3 hours, 6 hours  
+
+**Computed Metrics**
+- Rolling mean  
+- Rolling standard deviation (3h, 6h)  
+- Rolling minimum and maximum  
+
+These features capture short-term variability and extreme solar wind conditions.
+
+### 4. Rate of Change Features (Dynamics)
+
+To detect sudden solar wind changes that trigger geomagnetic storms:
+
+- ΔBz = Bz(t) − Bz(t−1)  
+- ΔV = V(t) − V(t−1)  
+- ΔD = D(t) − D(t−1)  
+
+These represent rapid changes in IMF and solar wind parameters.
+
+### 5. Physics-Based Coupling Features
+
+Domain-specific interaction terms were engineered based on space weather physics:
+
+- Bz × V (solar wind coupling strength)  
+- Bz × Density  
+- V² × Density (dynamic pressure proxy)  
+- Electric Field Proxy = V × |Bz|  
+- Southward Electric Field = V × |Bz| when Bz < 0  
+- Alfvén Mach number proxy  
+
+These features approximate solar wind–magnetosphere energy coupling.
+
+### 6. Southward Bz Duration Features
+
+Southward IMF (Bz < 0) is critical for geomagnetic storms. Features include:
+
+- Binary Bz_negative indicator  
+- Consecutive duration of Bz < 0 (storm buildup indicator)  
+- Southward Bz strength magnitude  
+
+These capture storm onset and persistence behavior.
+
+### 7. Time-Based Features
+
+To capture diurnal and seasonal variations:
+
+- Hour of day  
+- Day of year  
+- Month  
+
+(Optionally cyclic sine/cosine encoding can be used for periodic patterns.)
+
+### Final Feature Dataset
+
+After feature engineering:
+- Lag features  
+- Rolling statistics  
+- Change rates  
+- Physics-based interaction features  
+- Time-based features  
 
 ## Notes
 
 * Raw datasets are not uploaded due to size limits.
 * Scripts are provided to reproduce preprocessing locally.
 * This project follows standard space weather forecasting methodology.
-
-
