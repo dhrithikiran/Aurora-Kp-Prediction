@@ -197,6 +197,63 @@ After feature engineering:
 - Physics-based interaction features  
 - Time-based features  
 
+## Dataset and Features
+
+- **NASA OMNI dataset** (time-shifted to Earth impact)
+- **Target:** Kp index (from OMNI), 3 hours ahead (`Kp_3h_ahead`)
+- **Input Features:**
+  - Solar wind speed (V)
+  - Proton density (D)
+  - IMF Bz (GSM)
+  - Proton temperature (optional)
+  - Flow pressure (optional)
+  - Lagged Kp values (Kp(t−1) to Kp(t−6))
+  - Lagged solar wind features, rolling statistics, rate-of-change features
+  - Physics-based coupling features (e.g., Bz × V)
+  - Time-based features (hour of day, day of year, month)
+
+
+## Target Creation and Time-Based Split
+
+- Created a `Timestamp` column from `Year`, `DOY`, `Hour`.
+- Generated **future target**: `Kp_3h_ahead = Kp.shift(-3)`.
+- Chronological **train-test split**:
+  - Train: first 80% of data
+  - Test: last 20% of data
+- Saves:
+  - `full_dataset_with_target.csv`
+  - `train.csv`
+  - `test.csv`
+
+
+## Models and Pipelines
+
+### 1. Linear Regression
+- Baseline model, simple and interpretable.
+- Handles numeric features only.
+- Metrics: MAE, RMSE, R²
+- Saved model: `models/linear_regression/linear_regression_kp.pkl`
+
+### 2. Random Forest Regression
+- Captures non-linear relationships and feature interactions.
+- Parameters: `n_estimators=200`, `max_depth=20`.
+- Metrics: MAE, RMSE, R²
+- Saved model: `models/random_forest/random_forest_kp.pkl`
+
+### 3. Neural Network (MLP)
+- Captures complex non-linear and temporal dependencies.
+- Architecture: `(128, 64, 32)` hidden layers, ReLU activation, Adam optimizer.
+- Features scaled using StandardScaler.
+- Metrics: MAE, RMSE, R²
+- Saved model: `models/neural_network/mlp_model.pkl`  
+- Saved scaler: `models/neural_network/scaler.pkl`
+
+
+## Evaluation
+- All models evaluated on **chronologically separated test data**.
+- Visualizations: Actual vs Predicted Kp over time.
+- Metrics summary available in CSV in respective `models/` folders.
+
 ## Notes
 
 * Raw datasets are not uploaded due to size limits.
