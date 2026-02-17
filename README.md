@@ -1,261 +1,140 @@
-# Kp Index Prediction Using Solar Wind Data
+# Kp Index Prediction for Aurora Forecasting
 
-## Project Overview
+Predicts the geomagnetic Kp index 3 hours ahead using solar wind data from NASA's OMNI dataset, then interprets the predicted Kp value to estimate aurora visibility.
 
-This project predicts the **Kp geomagnetic index 30–90 minutes ahead** using solar wind measurements. The predicted Kp index is used to estimate **aurora visibility** using time-series machine learning.
+---
 
+## Problem Statement
 
-## What is the Kp Index?
+Ground-based magnetometers measure the Kp index after a geomagnetic storm has already begun. This project predicts Kp in advance using upstream solar wind measurements at L1, giving a 3-hour warning window for aurora visibility forecasting.
 
-The **Kp index (0–9)** measures disturbances in Earth’s magnetic field:
+**Target:** `Kp_3h_ahead` — continuous regression output (0–9 scale)
 
-* Low Kp → Quiet geomagnetic conditions
-* High Kp → Geomagnetic storms and possible aurora
+---
 
-Kp is **not measured by satellites**. It is calculated from **ground-based magnetometer stations worldwide**.
+## Dataset
 
+- **Source:** NASA OMNI dataset (Jan 2025 – Jan 2026)
+- **Why OMNI:** Already time-shifted to Earth impact time, no manual propagation delay needed
+- **Raw format:** Fixed-width `.txt` file, converted to CSV
+- **Input features:** IMF Bz (GSM), Solar wind speed, Proton density, Proton temperature, Flow pressure, past Kp values
+- **Target:** Kp × 10 stored in OMNI → divided by 10 to get real Kp
 
-## Solar Wind Data and L1 Satellites
+---
 
-Satellites at **Lagrange Point 1 (L1)** measure solar wind before it reaches Earth. The main parameters used in this project are:
+## Approach
 
-* Solar wind speed (V)
-* Proton density (D)
-* IMF Bz (GSM coordinate system)
-* Proton temperature (optional)
-* Flow pressure  (optional) 
+### Preprocessing
+- Loaded raw `.txt`, assigned column names, converted `Kp_x10 / 10` → `Kp`
+- Filled missing values with column median
 
+### EDA
+- Time-series plots of Kp and all solar wind parameters
+- Correlation heatmap, distribution histograms, boxplots, scatter plots vs Kp
+- Rolling averages (24h, 72h) and lagged feature visualizations
 
-## Time Shifting Concept
+### Feature Engineering
+Starting from 10 raw columns → **66 features** after engineering:
+- **Lag features:** Bz, speed, density, Kp at t−1, t−2, t−3, t−6
+- **Rolling statistics:** Mean, std, min/max over 1h, 3h, 6h windows
+- **Rate of change:** ΔBz, ΔV, ΔDensity (storm onset detection)
+- **Physics-based:** Bz×V, Electric field proxy, Alfvén Mach proxy, dynamic pressure proxy
+- **Southward Bz:** Binary flag, consecutive southward duration, southward magnitude
+- **Time features:** Hour of day, day of year, month
 
-Solar wind takes **30–90 minutes** to travel from L1 to Earth.
-Therefore, solar wind data must be **time shifted** so timestamps represent when the solar wind reaches Earth.
+### Train-Test Split
+- Chronological split — **no random shuffling** (prevents data leakage)
+- Train: first 80% | Test: last 20%
+- Final dataset: **8,933 rows × 66 columns**
 
-### Analogy
+### Models
 
-Weather sensor at 5:00 AM → predicts temperature at 6:00 AM
-Similarly: Solar wind at 04:30–05:30 → predicts Kp at 06:00
+| Model | Why Used |
+|---|---|
+| Linear Regression | Baseline — interpretable, shows physical feature relationships |
+| Random Forest (200 trees, depth 20) | Handles nonlinear storm dynamics, robust to noise |
+| Neural Network (128→64→32, ReLU, Adam) | Captures complex temporal patterns |
 
+All models evaluated on MAE, RMSE, and R².
 
-## Dataset Used
+---
 
-### Input Dataset
+## Results
 
-* **NASA OMNI dataset**
-* Already time-shifted to Earth impact time
-* Standard dataset used in space weather research
+Predictions and metrics saved per model:
 
-### Target Variable
+```
+models/
+├── linear_regression/   → linear_regression_kp.pkl, metrics.csv, test_predictions.csv
+├── random_forest/       → random_forest_kp.pkl, metrics.csv, test_predictions.csv
+└── neural_network/      → mlp_model.pkl, scaler.pkl, metrics.csv, test_predictions.csv
+```
 
-* **Kp index from OMNI dataset** (ground station measurements synchronized with solar wind)
-* OMNI provides **Kp × 10**, so values are divided by 10 during preprocessing
+---
 
+## Aurora Interpretation
 
-## Features Used
+Predicted Kp values are mapped to real-world aurora visibility using NOAA's G-scale:
 
-* Solar wind speed (V)
-* Proton density (D)
-* IMF Bz (GSM)
-* Proton temperature (optional)
-* Flow pressure (optional) 
-* Past Kp values: Kp(t−1) to Kp(t−6) to capture storm persistence
+| Kp | Storm Level | Aurora Visibility |
+|---|---|---|
+| 0–3 | G0 Quiet | Polar regions only |
+| 4 | G0 Unsettled | Northern Scotland, Scandinavia |
+| 5 | G1 Minor | Scotland, northern England |
+| 6 | G2 Moderate | Southern England, central Europe |
+| 7+ | G3–G5 | Northern USA, southern Europe, further south |
 
+---
 
-## Prediction Task
+## Limitations
 
-The model predicts:
+- Only 1 year of data (~8,933 samples) — limited for neural network training
+- Median fill for missing values may misrepresent storm-time gaps
+- OMNI sentinel value replacement (`9999`, `99999`) runs after CSV save — ordering issue in pipeline
+- 299 NaNs remain in derived features after cleanup, handled by imputer in model files
+- Models predict continuous Kp but storm peaks (rare, high Kp events) are underrepresented in training data due to class imbalance
 
-**Kp(t + 3 hours)**
+---
 
-Kp is reported every 3 hours (00–03, 03–06, 06–09, etc.).
+## Future Improvements
 
+- Use multiple years of OMNI data to improve model generalisation
+- Fix sentinel value replacement ordering in preprocessing pipeline
+- Add cyclical encoding (sin/cos) for hour and day of year features
+- Experiment with LSTM or temporal models better suited for time-series
+- Incorporate real-time DSCOVR/ACE data feed for live aurora forecasting
+- Add storm classification layer on top of regression output (Kp ≥ 5 = storm alert)
 
-## Time Window Selection
+---
 
-To predict Kp 3 hours ahead, the model uses **1 hour of solar wind data before the prediction time**.
+## How to Run
 
-Example:
-To predict Kp at 06:00 → use solar wind data from 04:30 to 05:30.
+```bash
+# 1. Preprocess raw OMNI txt file
+python preprocessing.py
 
+# 2. Exploratory data analysis
+jupyter notebook eda.ipynb
 
-## Data Range
+# 3. Feature engineering
+python featureengineering.py
 
-* Start Date: 2025-01-01
-* End Date: 2026-01-01
+# 4. Create target and split data
+python train_split.py
 
+# 5. Train and evaluate models
+python 1_Linear_Regression.py
+python 2_Random_Forest.py
+python 3_Neural_Network.py
 
-## Data Processing Steps
+# 6. Aurora interpretation
+python aurora_interpretation.py
+```
 
-1. Download OMNI dataset
-2. Convert TXT file to CSV using Python
-3. Rename columns and clean data
-4. Convert Kp × 10 to real Kp
-5. Handled missing values / noisy data 
-6. Check numeric data types and convert it
+---
 
+## Dependencies
 
-## Exploratory Data Analysis (EDA)
-
-EDA was performed to understand dataset patterns and relationships:
-
-* **Basic Info & Descriptive Stats**: `df.info()` and `df.describe()`  
-* **Time Series Plots**: Visualize Kp and solar wind parameters over time  
-* **Correlation Heatmap**: Examine relationships between Kp and input features  
-* **Distribution Plots**: Histograms for Kp and solar wind parameters to check skewness  
-* **Boxplots**: Detect extreme values and outliers  
-* **Scatter Plots vs Kp**: Visualize the influence of each parameter on Kp  
-* **Rolling Averages**: 24h and 72h Kp rolling means to observe trends  
-* **Lagged Visualization**: Plot lagged solar wind features (1, 2, 3, 6 hours) to inspect temporal dependencies
-
-## Feature Engineering
-
-Feature engineering was performed to capture temporal dependencies, physical relationships, and storm dynamics in geomagnetic activity.
-
-### 1. Handling Missing Values
-
-The OMNI dataset may contain missing and flagged values. Missing values were handled using:
-- Linear interpolation for short gaps  
-- Forward-fill and backward-fill for small consecutive gaps  
-This prevents data leakage while preserving time-series continuity.
-
-### 2. Lag Features (Temporal Dependency)
-
-Geomagnetic activity depends on recent solar wind conditions, so lagged features were created:
-
-**Lagged Solar Wind Parameters**
-- Bz(t−1h), Bz(t−2h), Bz(t−3h), Bz(t−6h)  
-- Solar Wind Speed V(t−1h), V(t−2h), V(t−3h)  
-- Proton Density D(t−1h), D(t−2h), D(t−3h)
-
-**Lagged Kp Values**
-- Kp(t−1) to Kp(t−6)  
-These capture geomagnetic storm persistence and recovery effects.
-
-### 3. Rolling Statistics (Trend & Variability)
-
-Rolling window statistics were computed to capture recent trends:
-
-**Rolling Windows**
-- 1 hour, 3 hours, 6 hours  
-
-**Computed Metrics**
-- Rolling mean  
-- Rolling standard deviation (3h, 6h)  
-- Rolling minimum and maximum  
-
-These features capture short-term variability and extreme solar wind conditions.
-
-### 4. Rate of Change Features (Dynamics)
-
-To detect sudden solar wind changes that trigger geomagnetic storms:
-
-- ΔBz = Bz(t) − Bz(t−1)  
-- ΔV = V(t) − V(t−1)  
-- ΔD = D(t) − D(t−1)  
-
-These represent rapid changes in IMF and solar wind parameters.
-
-### 5. Physics-Based Coupling Features
-
-Domain-specific interaction terms were engineered based on space weather physics:
-
-- Bz × V (solar wind coupling strength)  
-- Bz × Density  
-- V² × Density (dynamic pressure proxy)  
-- Electric Field Proxy = V × |Bz|  
-- Southward Electric Field = V × |Bz| when Bz < 0  
-- Alfvén Mach number proxy  
-
-These features approximate solar wind–magnetosphere energy coupling.
-
-### 6. Southward Bz Duration Features
-
-Southward IMF (Bz < 0) is critical for geomagnetic storms. Features include:
-
-- Binary Bz_negative indicator  
-- Consecutive duration of Bz < 0 (storm buildup indicator)  
-- Southward Bz strength magnitude  
-
-These capture storm onset and persistence behavior.
-
-### 7. Time-Based Features
-
-To capture diurnal and seasonal variations:
-
-- Hour of day  
-- Day of year  
-- Month  
-
-(Optionally cyclic sine/cosine encoding can be used for periodic patterns.)
-
-### Final Feature Dataset
-
-After feature engineering:
-- Lag features  
-- Rolling statistics  
-- Change rates  
-- Physics-based interaction features  
-- Time-based features  
-
-## Dataset and Features
-
-- **NASA OMNI dataset** (time-shifted to Earth impact)
-- **Target:** Kp index (from OMNI), 3 hours ahead (`Kp_3h_ahead`)
-- **Input Features:**
-  - Solar wind speed (V)
-  - Proton density (D)
-  - IMF Bz (GSM)
-  - Proton temperature (optional)
-  - Flow pressure (optional)
-  - Lagged Kp values (Kp(t−1) to Kp(t−6))
-  - Lagged solar wind features, rolling statistics, rate-of-change features
-  - Physics-based coupling features (e.g., Bz × V)
-  - Time-based features (hour of day, day of year, month)
-
-
-## Target Creation and Time-Based Split
-
-- Created a `Timestamp` column from `Year`, `DOY`, `Hour`.
-- Generated **future target**: `Kp_3h_ahead = Kp.shift(-3)`.
-- Chronological **train-test split**:
-  - Train: first 80% of data
-  - Test: last 20% of data
-- Saves:
-  - `full_dataset_with_target.csv`
-  - `train.csv`
-  - `test.csv`
-
-
-## Models and Pipelines
-
-### 1. Linear Regression
-- Baseline model, simple and interpretable.
-- Handles numeric features only.
-- Metrics: MAE, RMSE, R²
-- Saved model: `models/linear_regression/linear_regression_kp.pkl`
-
-### 2. Random Forest Regression
-- Captures non-linear relationships and feature interactions.
-- Parameters: `n_estimators=200`, `max_depth=20`.
-- Metrics: MAE, RMSE, R²
-- Saved model: `models/random_forest/random_forest_kp.pkl`
-
-### 3. Neural Network (MLP)
-- Captures complex non-linear and temporal dependencies.
-- Architecture: `(128, 64, 32)` hidden layers, ReLU activation, Adam optimizer.
-- Features scaled using StandardScaler.
-- Metrics: MAE, RMSE, R²
-- Saved model: `models/neural_network/mlp_model.pkl`  
-- Saved scaler: `models/neural_network/scaler.pkl`
-
-
-## Evaluation
-- All models evaluated on **chronologically separated test data**.
-- Visualizations: Actual vs Predicted Kp over time.
-- Metrics summary available in CSV in respective `models/` folders.
-
-## Notes
-
-* Raw datasets are not uploaded due to size limits.
-* Scripts are provided to reproduce preprocessing locally.
-* This project follows standard space weather forecasting methodology.
+```
+pandas  numpy  matplotlib  seaborn  scikit-learn  joblib
+```
